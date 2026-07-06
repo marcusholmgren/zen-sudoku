@@ -10,30 +10,49 @@
   let status = $state('');
   // Whether the board is solved
   let solved = $state(false);
+  // Currently selected cell index
+  let selectedIndex = $state(null);
 
-  /** Return extra border classes to draw thick 3×3 box borders */
-  function borderClasses(index) {
-    const row = Math.floor(index / 9);
-    const col = index % 9;
-    const classes = [];
-    if (col % 3 === 0 && col !== 0) classes.push('border-l-2 border-l-slate-700 dark:border-l-slate-300');
-    if (row % 3 === 0 && row !== 0) classes.push('border-t-2 border-t-slate-700 dark:border-t-slate-300');
-    return classes.join(' ');
-  }
+  // Timer mock state
+  let timerText = $state('00:00');
 
-  function handleInput(index, event) {
-    const val = parseInt(event.target.value, 10);
-    cells[index] = isNaN(val) || val < 1 || val > 9 ? 0 : val;
-    givens[index] = cells[index] !== 0;
-    solved = false;
-    status = '';
+  function handleCellClick(index) {
+    if (givens[index]) return; // Don't select fixed cells
+    selectedIndex = index;
   }
 
   function handleKeydown(event) {
-    if (!/^[1-9]$/.test(event.key) && event.key !== 'Backspace' && event.key !== 'Delete' && event.key !== 'Tab') {
-      if (!event.ctrlKey && !event.metaKey) {
-        event.preventDefault();
-      }
+    if (selectedIndex === null) return;
+
+    if (/^[1-9]$/.test(event.key) && !givens[selectedIndex]) {
+      const val = parseInt(event.key, 10);
+      cells[selectedIndex] = val;
+      solved = false;
+      status = '';
+    } else if ((event.key === 'Backspace' || event.key === 'Delete' || event.key === 'Clear') && !givens[selectedIndex]) {
+      cells[selectedIndex] = 0;
+      solved = false;
+      status = '';
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      selectedIndex = selectedIndex >= 9 ? selectedIndex - 9 : selectedIndex;
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      selectedIndex = selectedIndex < 72 ? selectedIndex + 9 : selectedIndex;
+    } else if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      selectedIndex = selectedIndex % 9 > 0 ? selectedIndex - 1 : selectedIndex;
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      selectedIndex = selectedIndex % 9 < 8 ? selectedIndex + 1 : selectedIndex;
+    }
+  }
+
+  function clearSelectedCell() {
+    if (selectedIndex !== null && !givens[selectedIndex]) {
+      cells[selectedIndex] = 0;
+      solved = false;
+      status = '';
     }
   }
 
@@ -47,6 +66,7 @@
       cells = Array.from(result);
       status = '✅ Solved!';
       solved = true;
+      selectedIndex = null;
     }
   }
 
@@ -55,6 +75,7 @@
     givens = Array(81).fill(false);
     status = '';
     solved = false;
+    selectedIndex = null;
   }
 
   // Sample "easy" puzzle for the demo
@@ -77,81 +98,129 @@
     givens = SAMPLE.map(v => v !== 0);
     status = '';
     solved = false;
+    selectedIndex = null;
   }
 </script>
 
-<div class="flex flex-col items-center gap-6">
-  <!-- Board -->
-  <div
-    class="grid grid-cols-9 border-2 border-slate-700 dark:border-slate-300 shadow-lg"
-    role="grid"
-    aria-label="Sudoku board"
-  >
-    {#each cells as cell, i}
-      <div
-        class="relative w-10 h-10 border border-slate-300 dark:border-slate-600 {borderClasses(i)}"
-        role="gridcell"
-      >
-        <input
-          type="text"
-          inputmode="numeric"
-          maxlength="1"
-          aria-label="Cell {Math.floor(i / 9) + 1},{(i % 9) + 1}"
-          value={cell === 0 ? '' : cell}
-          readonly={givens[i] && !solved}
-          class="absolute inset-0 w-full h-full text-center text-base font-medium
-                 focus:outline-none focus:bg-blue-50 dark:focus:bg-blue-900/30
-                 {givens[i]
-                   ? 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-semibold'
-                   : solved
-                     ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400'
-                     : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300'}
-                 "
-          oninput={(e) => handleInput(i, e)}
-          onkeydown={handleKeydown}
-        />
+<svelte:window on:keydown={handleKeydown} />
+
+<div class="flex-1 max-w-6xl w-full mx-auto px-4 md:px-8 py-6">
+
+  <!-- Header Area -->
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
+    <div>
+      <h1 class="text-headline-md font-bold text-on-surface mb-1">Classic Sudoku</h1>
+      <div class="flex items-center gap-3">
+        <span class="px-3 py-1 bg-surface-container-high rounded-full text-[12px] font-bold text-on-surface-variant">Medium</span>
+        <div class="flex items-center gap-1 text-on-surface-variant">
+          <span class="material-symbols-outlined text-[16px]">timer</span>
+          <span class="font-label-mono text-label-mono">{timerText}</span>
+        </div>
       </div>
-    {/each}
+    </div>
+
+    <!-- Status Indicator -->
+    {#if status}
+      <div id="puzzle-status" class="flex items-center gap-2 px-4 py-2 rounded-xl transition-all {solved ? 'bg-primary-container/30 text-on-primary-container' : 'bg-error-container/30 text-error'}">
+        <span class="material-symbols-outlined text-[18px]">{solved ? 'verified' : 'warning'}</span>
+        <span class="font-label-mono text-[12px]">{status}</span>
+      </div>
+    {/if}
   </div>
 
-  <!-- Status -->
-  {#if status}
-    <p
-      class="text-sm font-medium {solved ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}"
-      role="status"
-      aria-live="polite"
-    >
-      {status}
-    </p>
-  {/if}
+  <div class="grid grid-cols-1 md:grid-cols-12 gap-8">
 
-  <!-- Controls -->
-  <div class="flex gap-3 flex-wrap justify-center">
-    <button
-      onclick={loadSample}
-      class="px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600
-             text-slate-800 dark:text-slate-200 text-sm font-medium transition-colors"
-    >
-      Load Sample
-    </button>
-    <button
-      onclick={solvePuzzle}
-      class="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold
-             transition-colors shadow"
-    >
-      Solve
-    </button>
-    <button
-      onclick={clearBoard}
-      class="px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600
-             text-slate-800 dark:text-slate-200 text-sm font-medium transition-colors"
-    >
-      Clear
-    </button>
+    <!-- Left Side Grid Area -->
+    <div class="md:col-span-9 flex flex-col items-center">
+      <div class="w-full max-w-[600px] bg-white p-2 md:p-4 rounded-3xl shadow-sm border border-outline-variant">
+
+        <!-- Grid -->
+        <div id="grid" class="sudoku-grid rounded-xl overflow-hidden">
+          {#each cells as cell, i}
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div
+              class="sudoku-cell font-display-grid-mobile text-display-grid-mobile md:font-display-grid md:text-display-grid {givens[i] ? 'fixed' : ''} {selectedIndex === i ? 'active' : ''} {cell !== 0 && !givens[i] ? 'text-secondary' : ''}"
+              onclick={() => handleCellClick(i)}
+            >
+              {cell === 0 ? '' : cell}
+            </div>
+          {/each}
+        </div>
+
+      </div>
+
+      <!-- Primary Action Mobile/Tablet Row -->
+      <div class="w-full mt-6 flex gap-4 md:hidden">
+        <button onclick={solvePuzzle} class="flex-1 py-4 bg-primary text-on-primary rounded-xl font-bold shadow-md active:scale-95 transition-all">
+          Solve
+        </button>
+        <button onclick={loadSample} class="flex-1 py-4 bg-surface-container-high text-on-surface rounded-xl font-bold border border-outline-variant active:scale-95 transition-all">
+          New Game
+        </button>
+      </div>
+    </div>
+
+    <!-- Right Side Panel -->
+    <div class="md:col-span-3 flex flex-col gap-6">
+      <div class="bg-surface-container-low p-6 rounded-3xl border border-outline-variant shadow-sm w-full">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="font-bold text-on-surface-variant">Controls</h3>
+        </div>
+        <div class="flex flex-col gap-3">
+          <button onclick={clearSelectedCell} class="w-full bg-error-container/20 text-error hover:bg-error-container hover:text-on-error-container border border-error/20 flex items-center justify-center rounded-2xl py-3 font-bold transition-all">
+            <span class="material-symbols-outlined mr-2">backspace</span> Clear Cell
+          </button>
+          <button onclick={clearBoard} class="w-full bg-surface-container hover:bg-surface-container-high text-on-surface flex items-center justify-center rounded-2xl py-3 font-bold transition-all mt-2">
+            Clear Board
+          </button>
+        </div>
+      </div>
+
+      <!-- Primary Action Desktop -->
+      <div class="hidden md:flex flex-col gap-3">
+        <button onclick={solvePuzzle} class="w-full py-4 bg-primary text-on-primary rounded-xl font-bold shadow-lg hover:shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2">
+          <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+          Solve Puzzle
+        </button>
+        <button onclick={loadSample} class="w-full py-4 bg-white text-primary border-2 border-primary rounded-xl font-bold hover:bg-primary-container/10 active:scale-95 transition-all flex items-center justify-center gap-2">
+          <span class="material-symbols-outlined">add</span>
+          New Game
+        </button>
+      </div>
+    </div>
+
   </div>
-
-  <p class="text-xs text-slate-400 dark:text-slate-500 max-w-xs text-center">
-    Enter digits 1–9 in the empty cells, then click <strong>Solve</strong>. Or click
-    <strong>Load Sample</strong> to try a pre-filled puzzle.
-  </p>
 </div>
+
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-4 pt-2 bg-surface-container rounded-t-xl shadow-lg">
+  <button onclick={solvePuzzle} class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-full px-5 py-1 active:scale-90 transition-transform">
+    <span class="material-symbols-outlined">lightbulb</span>
+    <span class="font-label-mono text-label-mono">Solve</span>
+  </button>
+  <button onclick={clearBoard} class="flex flex-col items-center justify-center text-on-surface-variant active:scale-90 transition-transform">
+    <span class="material-symbols-outlined">layers_clear</span>
+    <span class="font-label-mono text-label-mono">Clear</span>
+  </button>
+  <button onclick={loadSample} class="flex flex-col items-center justify-center text-on-surface-variant active:scale-90 transition-transform">
+    <span class="material-symbols-outlined">restart_alt</span>
+    <span class="font-label-mono text-label-mono">Reset</span>
+  </button>
+  <button class="flex flex-col items-center justify-center text-on-surface-variant active:scale-90 transition-transform">
+    <span class="material-symbols-outlined">history</span>
+    <span class="font-label-mono text-label-mono">History</span>
+  </button>
+</nav>
+
+<style>
+  /* Ensure main view doesn't get covered by BottomNavBar on mobile */
+  :global(body) {
+    padding-bottom: 80px;
+  }
+  @media (min-width: 768px) {
+    :global(body) {
+      padding-bottom: 0;
+    }
+  }
+</style>

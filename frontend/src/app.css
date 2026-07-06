@@ -1,1 +1,167 @@
 @import "tailwindcss";
+
+@theme {
+  --color-on-secondary-fixed: #001944;
+  --color-secondary: #3c5ca0;
+  --color-tertiary-container: #d4cdad;
+  --color-tertiary-fixed: #ebe3c1;
+  --color-on-tertiary-container: #5b573d;
+  --color-surface-bright: #f7f9fb;
+  --color-error-container: #ffdad6;
+  --color-surface-variant: #e0e3e5;
+  --color-on-tertiary-fixed-variant: #4b472f;
+  --color-primary-container: #a7d7c5;
+  --color-secondary-fixed-dim: #afc6ff;
+  --color-inverse-primary: #a1d1bf;
+  --color-on-tertiary-fixed: #1f1c07;
+  --color-outline: #717975;
+  --color-on-primary-fixed-variant: #214f41;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container: #eceef0;
+  --color-on-secondary-fixed-variant: #214487;
+  --color-secondary-container: #96b5ff;
+  --color-on-error: #ffffff;
+  --color-tertiary: #645f45;
+  --color-on-primary: #ffffff;
+  --color-surface: #f7f9fb;
+  --color-inverse-on-surface: #eff1f3;
+  --color-on-surface: #191c1e;
+  --color-surface-container-low: #f2f4f6;
+  --color-on-secondary-container: #224587;
+  --color-on-primary-fixed: #002118;
+  --color-surface-tint: #3a6758;
+  --color-error: #ba1a1a;
+  --color-primary-fixed: #bcedda;
+  --color-background: #f7f9fb;
+  --color-inverse-surface: #2d3133;
+  --color-surface-container-highest: #e0e3e5;
+  --color-on-tertiary: #ffffff;
+  --color-surface-dim: #d8dadc;
+  --color-primary-fixed-dim: #a1d1bf;
+  --color-primary: #3a6758;
+  --color-on-background: #191c1e;
+  --color-on-surface-variant: #404945;
+  --color-on-error-container: #93000a;
+  --color-outline-variant: #c0c8c3;
+  --color-on-secondary: #ffffff;
+  --color-tertiary-fixed-dim: #cec7a7;
+
+  --font-display-grid-mobile: "Manrope";
+  --font-headline-md: "Manrope";
+  --font-display-grid: "Manrope";
+  --font-body-md: "Manrope";
+  --font-body-lg: "Manrope";
+  --font-label-mono: "JetBrains Mono";
+}
+
+/* Base styles and components from Stitch design */
+body {
+    background-color: #f7f9fb;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+.sudoku-grid {
+    aspect-ratio: 1 / 1;
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    border: 2px solid #717975;
+    background-color: #717975;
+    gap: 1px;
+    box-shadow: inset 0 2px 10px rgba(0,0,0,0.05);
+}
+
+.sudoku-cell {
+    background-color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+    position: relative;
+    /* Added to support input */
+    padding: 0;
+}
+
+
+
+.sudoku-cell:hover {
+    background-color: #f2f4f6;
+}
+
+.sudoku-cell.active {
+    background-color: #afc6ff44;
+    box-shadow: inset 0 0 0 2px #3c5ca0;
+    z-index: 10;
+}
+
+.sudoku-cell.fixed {
+    background-color: #f7f9fb;
+    font-weight: 700;
+    color: #191c1e;
+}
+
+.sudoku-cell:nth-child(3n) {
+    border-right: 3px solid #717975;
+}
+.sudoku-cell:nth-child(9n) {
+    border-right: none;
+}
+
+.sudoku-cell:nth-child(n+19):nth-child(-n+27),
+.sudoku-cell:nth-child(n+46):nth-child(-n+54) {
+    border-bottom: 3px solid #717975;
+}
+
+.glass-panel {
+    backdrop-filter: blur(12px);
+    background: rgba(255, 255, 255, 0.7);
+}
+
+.number-pad-btn {
+    aspect-ratio: 1/1;
+    transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.number-pad-btn:active {
+    transform: scale(0.9);
+}
+
+.material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Utility classes for typography that mapping would otherwise miss */
+.text-display-grid-mobile {
+    font-size: 22px;
+    line-height: 28px;
+    font-weight: 500;
+}
+.text-headline-md {
+    font-size: 24px;
+    line-height: 32px;
+    font-weight: 600;
+}
+.text-display-grid {
+    font-size: 28px;
+    line-height: 32px;
+    letter-spacing: -0.02em;
+    font-weight: 500;
+}
+.text-body-md {
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 400;
+}
+.text-body-lg {
+    font-size: 18px;
+    line-height: 28px;
+    font-weight: 400;
+}
+.text-label-mono {
+    font-size: 14px;
+    line-height: 20px;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+}
