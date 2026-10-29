@@ -1,6 +1,30 @@
 <script>
-  /** @type {{ solve: (board: Uint8Array) => Uint8Array }} */
-  let { solve } = $props();
+  import { onMount, onDestroy } from 'svelte';
+
+  /**
+   * @type {{
+   *   solve: (board: Uint8Array) => Uint8Array,
+   *   generate: (difficulty: string) => Uint8Array,
+   *   timerRunning: boolean,
+   *   secondsElapsed: number,
+   *   difficulty: string,
+   *   onToggleTimer: () => void,
+   *   onNewGame: (diff: string) => void,
+   *   onOpenNewGameModal: () => void,
+   *   onOpenHistory: () => void
+   * }}
+   */
+  let {
+    solve,
+    generate,
+    timerRunning = false,
+    secondsElapsed = 0,
+    difficulty = 'Medium',
+    onToggleTimer,
+    onNewGame,
+    onOpenNewGameModal,
+    onOpenHistory
+  } = $props();
 
   // 81-cell board; 0 = empty
   let cells = $state(Array(81).fill(0));
@@ -13,12 +37,72 @@
   // Currently selected cell index
   let selectedIndex = $state(null);
 
-  // Timer mock state
-  let timerText = $state('00:00');
+  // Format time (seconds to MM:SS)
+  let timerText = $derived(() => {
+    const mins = Math.floor(secondsElapsed / 60);
+    const secs = secondsElapsed % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  });
+
+  // Default sample puzzle fallback if generate isn't available
+  const SAMPLE = [
+    5,3,0, 0,7,0, 0,0,0,
+    6,0,0, 1,9,5, 0,0,0,
+    0,9,8, 0,0,0, 0,6,0,
+
+    8,0,0, 0,6,0, 0,0,3,
+    4,0,0, 8,0,3, 0,0,1,
+    7,0,0, 0,2,0, 0,0,6,
+
+    0,6,0, 0,0,0, 2,8,0,
+    0,0,0, 4,1,9, 0,0,5,
+    0,0,0, 0,8,0, 0,7,9,
+  ];
+
+  function loadBoardForDifficulty(diff) {
+    let newBoard;
+    if (generate) {
+      const generated = generate(diff.toLowerCase());
+      if (generated && generated.length === 81) {
+        newBoard = Array.from(generated);
+      }
+    }
+    if (!newBoard) {
+      newBoard = [...SAMPLE];
+    }
+    cells = newBoard;
+    givens = newBoard.map(v => v !== 0);
+    status = '';
+    solved = false;
+    selectedIndex = null;
+  }
+
+  // Load puzzle when component mounts or difficulty changes via external action
+  onMount(() => {
+    loadBoardForDifficulty(difficulty);
+  });
+
+  export function resetPuzzleWithDifficulty(newDiff) {
+    loadBoardForDifficulty(newDiff);
+  }
 
   function handleCellClick(index) {
     if (givens[index]) return; // Don't select fixed cells
     selectedIndex = index;
+  }
+
+  function checkCompletion(currentCells) {
+    // Check if board has no 0s and is valid solution
+    if (currentCells.includes(0)) return false;
+    if (!solve) return false;
+    const board = new Uint8Array(currentCells);
+    const result = solve(board);
+    if (!result || result.length === 0) return false;
+    // Check if currentCells matches result
+    for (let i = 0; i < 81; i++) {
+      if (currentCells[i] !== result[i]) return false;
+    }
+    return true;
   }
 
   function handleKeydown(event) {
@@ -27,8 +111,15 @@
     if (/^[1-9]$/.test(event.key) && !givens[selectedIndex]) {
       const val = parseInt(event.key, 10);
       cells[selectedIndex] = val;
-      solved = false;
       status = '';
+      if (checkCompletion(cells)) {
+        solved = true;
+        status = '🎉 Puzzle Completed!';
+        saveToHistory();
+        if (timerRunning && onToggleTimer) {
+          onToggleTimer(); // Auto stop timer on complete
+        }
+      }
     } else if ((event.key === 'Backspace' || event.key === 'Delete' || event.key === 'Clear') && !givens[selectedIndex]) {
       cells[selectedIndex] = 0;
       solved = false;
@@ -48,6 +139,20 @@
     }
   }
 
+  function handleNumPadInput(num) {
+    if (selectedIndex === null || givens[selectedIndex]) return;
+    cells[selectedIndex] = num;
+    status = '';
+    if (checkCompletion(cells)) {
+      solved = true;
+      status = '🎉 Puzzle Completed!';
+      saveToHistory();
+      if (timerRunning && onToggleTimer) {
+        onToggleTimer(); // Auto stop timer on complete
+      }
+    }
+  }
+
   function clearSelectedCell() {
     if (selectedIndex !== null && !givens[selectedIndex]) {
       cells[selectedIndex] = 0;
@@ -64,41 +169,40 @@
       solved = false;
     } else {
       cells = Array.from(result);
-      status = '✅ Solved!';
+      status = '✅ Solved with AI Assist!';
       solved = true;
       selectedIndex = null;
+      saveToHistory();
+      if (timerRunning && onToggleTimer) {
+        onToggleTimer(); // Auto stop timer
+      }
     }
   }
 
   function clearBoard() {
-    cells = Array(81).fill(0);
-    givens = Array(81).fill(false);
+    cells = cells.map((val, idx) => (givens[idx] ? val : 0));
     status = '';
     solved = false;
     selectedIndex = null;
   }
 
-  // Sample "easy" puzzle for the demo
-  const SAMPLE = [
-    5,3,0, 0,7,0, 0,0,0,
-    6,0,0, 1,9,5, 0,0,0,
-    0,9,8, 0,0,0, 0,6,0,
-
-    8,0,0, 0,6,0, 0,0,3,
-    4,0,0, 8,0,3, 0,0,1,
-    7,0,0, 0,2,0, 0,0,6,
-
-    0,6,0, 0,0,0, 2,8,0,
-    0,0,0, 4,1,9, 0,0,5,
-    0,0,0, 0,8,0, 0,7,9,
-  ];
-
-  function loadSample() {
-    cells = [...SAMPLE];
-    givens = SAMPLE.map(v => v !== 0);
-    status = '';
-    solved = false;
-    selectedIndex = null;
+  function saveToHistory() {
+    try {
+      const historyJson = sessionStorage.getItem('sudoku_history');
+      const history = historyJson ? JSON.parse(historyJson) : [];
+      const newEntry = {
+        id: 'puzzle_' + Date.now(),
+        difficulty: difficulty,
+        timeTakenSeconds: secondsElapsed,
+        timeTakenFormatted: timerText(),
+        date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        completedAt: new Date().toISOString()
+      };
+      history.unshift(newEntry);
+      sessionStorage.setItem('sudoku_history', JSON.stringify(history));
+    } catch (e) {
+      console.error('Failed to save to SessionStorage:', e);
+    }
   }
 </script>
 
@@ -111,10 +215,17 @@
     <div>
       <h1 class="text-headline-md font-bold text-on-surface mb-1">Classic Sudoku</h1>
       <div class="flex items-center gap-3">
-        <span class="px-3 py-1 bg-surface-container-high rounded-full text-[12px] font-bold text-on-surface-variant">Medium</span>
-        <div class="flex items-center gap-1 text-on-surface-variant">
-          <span class="material-symbols-outlined text-[16px]">timer</span>
-          <span class="font-label-mono text-label-mono">{timerText}</span>
+        <span class="px-3 py-1 bg-surface-container-high rounded-full text-[12px] font-bold text-on-surface-variant capitalize">{difficulty}</span>
+        <div class="flex items-center gap-2 bg-surface-container-low px-3 py-1 rounded-full border border-outline-variant">
+          <span class="material-symbols-outlined text-[18px] text-primary">timer</span>
+          <span class="font-label-mono text-label-mono text-on-surface font-semibold">{timerText()}</span>
+          <button
+            onclick={onToggleTimer}
+            disabled={solved}
+            class="ml-1 px-2.5 py-0.5 text-xs font-bold rounded-md transition-all active:scale-95 disabled:opacity-50 {timerRunning ? 'bg-error-container text-error hover:bg-error/20' : 'bg-primary text-on-primary hover:bg-primary/90'}"
+          >
+            {timerRunning ? 'Stop' : 'Start'}
+          </button>
         </div>
       </div>
     </div>
@@ -150,13 +261,25 @@
 
       </div>
 
+      <!-- Number Pad (On screen input for touch/mouse) -->
+      <div class="w-full max-w-[600px] mt-6 grid grid-cols-9 gap-1 md:gap-2">
+        {#each [1, 2, 3, 4, 5, 6, 7, 8, 9] as num}
+          <button
+            onclick={() => handleNumPadInput(num)}
+            class="number-pad-btn bg-surface-container hover:bg-primary-container/40 text-on-surface font-bold text-lg md:text-xl rounded-xl flex items-center justify-center border border-outline-variant/60 shadow-xs"
+          >
+            {num}
+          </button>
+        {/each}
+      </div>
+
       <!-- Primary Action Mobile/Tablet Row -->
       <div class="w-full mt-6 flex gap-4 md:hidden">
         <button onclick={solvePuzzle} class="flex-1 py-4 bg-primary text-on-primary rounded-xl font-bold shadow-md active:scale-95 transition-all">
           Solve
         </button>
-        <button onclick={loadSample} class="flex-1 py-4 bg-surface-container-high text-on-surface rounded-xl font-bold border border-outline-variant active:scale-95 transition-all">
-          New Game
+        <button onclick={onOpenNewGameModal} class="flex-1 py-4 bg-surface-container-high text-on-surface rounded-xl font-bold border border-outline-variant active:scale-95 transition-all">
+          + New Game
         </button>
       </div>
     </div>
@@ -171,8 +294,8 @@
           <button onclick={clearSelectedCell} class="w-full bg-error-container/20 text-error hover:bg-error-container hover:text-on-error-container border border-error/20 flex items-center justify-center rounded-2xl py-3 font-bold transition-all">
             <span class="material-symbols-outlined mr-2">backspace</span> Clear Cell
           </button>
-          <button onclick={clearBoard} class="w-full bg-surface-container hover:bg-surface-container-high text-on-surface flex items-center justify-center rounded-2xl py-3 font-bold transition-all mt-2">
-            Clear Board
+          <button onclick={clearBoard} class="w-full bg-surface-container hover:bg-surface-container-high text-on-surface flex items-center justify-center rounded-2xl py-3 font-bold transition-all">
+            Reset Answers
           </button>
         </div>
       </div>
@@ -183,7 +306,7 @@
           <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
           Solve Puzzle
         </button>
-        <button onclick={loadSample} class="w-full py-4 bg-white text-primary border-2 border-primary rounded-xl font-bold hover:bg-primary-container/10 active:scale-95 transition-all flex items-center justify-center gap-2">
+        <button onclick={onOpenNewGameModal} class="w-full py-4 bg-white text-primary border-2 border-primary rounded-xl font-bold hover:bg-primary-container/10 active:scale-95 transition-all flex items-center justify-center gap-2">
           <span class="material-symbols-outlined">add</span>
           New Game
         </button>
@@ -192,35 +315,3 @@
 
   </div>
 </div>
-
-<!-- BottomNavBar (Mobile Only) -->
-<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-4 pt-2 bg-surface-container rounded-t-xl shadow-lg">
-  <button onclick={solvePuzzle} class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-full px-5 py-1 active:scale-90 transition-transform">
-    <span class="material-symbols-outlined">lightbulb</span>
-    <span class="font-label-mono text-label-mono">Solve</span>
-  </button>
-  <button onclick={clearBoard} class="flex flex-col items-center justify-center text-on-surface-variant active:scale-90 transition-transform">
-    <span class="material-symbols-outlined">layers_clear</span>
-    <span class="font-label-mono text-label-mono">Clear</span>
-  </button>
-  <button onclick={loadSample} class="flex flex-col items-center justify-center text-on-surface-variant active:scale-90 transition-transform">
-    <span class="material-symbols-outlined">restart_alt</span>
-    <span class="font-label-mono text-label-mono">Reset</span>
-  </button>
-  <button class="flex flex-col items-center justify-center text-on-surface-variant active:scale-90 transition-transform">
-    <span class="material-symbols-outlined">history</span>
-    <span class="font-label-mono text-label-mono">History</span>
-  </button>
-</nav>
-
-<style>
-  /* Ensure main view doesn't get covered by BottomNavBar on mobile */
-  :global(body) {
-    padding-bottom: 80px;
-  }
-  @media (min-width: 768px) {
-    :global(body) {
-      padding-bottom: 0;
-    }
-  }
-</style>
