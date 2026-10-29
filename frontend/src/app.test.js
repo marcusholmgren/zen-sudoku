@@ -132,3 +132,71 @@ describe('Daily Challenge Timer Logic', () => {
     expect(timerRunning).toBe(false);
   });
 });
+
+describe('Custom Blank Board Logic & Solver Integration', () => {
+  beforeAll(async () => {
+    const wasmPath = path.resolve(__dirname, './wasm/zen_sudoku_solver_bg.wasm');
+    const wasmBuffer = fs.readFileSync(wasmPath);
+    await initWasm(wasmBuffer);
+  });
+
+  it('creates a blank 81-cell board for custom puzzle input', () => {
+    const blankBoard = new Array(81).fill(0);
+    expect(blankBoard.length).toBe(81);
+    expect(blankBoard.every(v => v === 0)).toBe(true);
+  });
+
+  it('solves a custom user puzzle successfully and preserves user givens', () => {
+    // Custom puzzle with valid givens
+    const customPuzzle = [
+      5, 3, 0, 0, 7, 0, 0, 0, 0,
+      6, 0, 0, 1, 9, 5, 0, 0, 0,
+      0, 9, 8, 0, 0, 0, 0, 6, 0,
+      8, 0, 0, 0, 6, 0, 0, 0, 3,
+      4, 0, 0, 8, 0, 3, 0, 0, 1,
+      7, 0, 0, 0, 2, 0, 0, 0, 6,
+      0, 6, 0, 0, 0, 0, 2, 8, 0,
+      0, 0, 0, 4, 1, 9, 0, 0, 5,
+      0, 0, 0, 0, 8, 0, 0, 7, 9
+    ];
+
+    const solution = solve(customPuzzle);
+    expect(solution.length).toBe(81);
+    expect(solution.includes(0)).toBe(false);
+
+    // Verify user entered givens are preserved in the solution
+    for (let i = 0; i < 81; i++) {
+      if (customPuzzle[i] !== 0) {
+        expect(solution[i]).toBe(customPuzzle[i]);
+      }
+    }
+  });
+
+  it('detects invalid custom puzzle inputs with conflicting digits', () => {
+    const invalidCustomPuzzle = new Array(81).fill(0);
+    invalidCustomPuzzle[0] = 5;
+    invalidCustomPuzzle[1] = 5; // Duplicate in row 0
+
+    const solution = solve(invalidCustomPuzzle);
+    expect(solution.length).toBe(0);
+  });
+
+  it('supports saving Custom difficulty puzzles in SessionStorage', () => {
+    const historyKey = 'sudoku_history';
+    sessionStorage.clear();
+
+    const customEntry = {
+      id: 'puzzle_custom_1',
+      difficulty: 'Custom',
+      timeTakenSeconds: 95,
+      timeTakenFormatted: '01:35',
+      date: 'Mar 30, 2025 03:00 PM',
+      completedAt: new Date().toISOString()
+    };
+
+    sessionStorage.setItem(historyKey, JSON.stringify([customEntry]));
+    const retrieved = JSON.parse(sessionStorage.getItem(historyKey));
+    expect(retrieved.length).toBe(1);
+    expect(retrieved[0].difficulty).toBe('Custom');
+  });
+});

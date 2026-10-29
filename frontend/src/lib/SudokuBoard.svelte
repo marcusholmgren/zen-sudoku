@@ -62,8 +62,10 @@
   ];
 
   export function loadBoardForDifficulty(diff) {
-    let newBoard;
-    if (generate) {
+    let newBoard = null;
+    if (diff && (diff.toLowerCase() === 'custom' || diff.toLowerCase() === 'blank' || diff.toLowerCase() === 'empty')) {
+      newBoard = Array(81).fill(0);
+    } else if (generate) {
       try {
         const generated = generate(diff.toLowerCase());
         if (generated && generated.length === 81) {
@@ -171,12 +173,19 @@
   }
 
   function solvePuzzle() {
+    if (cells.every(v => v === 0)) {
+      status = '💡 Enter some numbers first to solve your puzzle!';
+      return;
+    }
     const board = new Uint8Array(cells);
     const result = solve(board);
     if (!result || result.length === 0) {
-      status = '❌ No solution found.';
+      status = '❌ No valid solution found for this board.';
       solved = false;
     } else {
+      if (difficulty.toLowerCase() === 'custom' || givens.every(v => !v)) {
+        givens = cells.map(v => v !== 0);
+      }
       cells = Array.from(result);
       status = '✅ Solved with AI Assist!';
       selectedIndex = null;
@@ -186,6 +195,14 @@
 
   function clearBoard() {
     cells = cells.map((val, idx) => (givens[idx] ? val : 0));
+    status = '';
+    solved = false;
+    selectedIndex = null;
+  }
+
+  function clearAllEmpty() {
+    cells = Array(81).fill(0);
+    givens = Array(81).fill(false);
     status = '';
     solved = false;
     selectedIndex = null;
@@ -301,9 +318,20 @@
           <button onclick={clearSelectedCell} class="w-full bg-error-container/20 text-error hover:bg-error-container hover:text-on-error-container border border-error/20 flex items-center justify-center rounded-2xl py-3 font-bold transition-all">
             <span class="material-symbols-outlined mr-2">backspace</span> Clear Cell
           </button>
-          <button onclick={clearBoard} class="w-full bg-surface-container hover:bg-surface-container-high text-on-surface flex items-center justify-center rounded-2xl py-3 font-bold transition-all">
-            Reset Answers
-          </button>
+          {#if difficulty.toLowerCase() === 'custom'}
+            <button onclick={clearAllEmpty} class="w-full bg-surface-container hover:bg-surface-container-high text-on-surface flex items-center justify-center rounded-2xl py-3 font-bold transition-all">
+              <span class="material-symbols-outlined mr-2">layers_clear</span> Clear All (Blank)
+            </button>
+            {#if givens.some(v => v)}
+              <button onclick={clearBoard} class="w-full bg-surface-container hover:bg-surface-container-high text-on-surface flex items-center justify-center rounded-2xl py-3 font-bold transition-all">
+                Reset Answers
+              </button>
+            {/if}
+          {:else}
+            <button onclick={clearBoard} class="w-full bg-surface-container hover:bg-surface-container-high text-on-surface flex items-center justify-center rounded-2xl py-3 font-bold transition-all">
+              Reset Answers
+            </button>
+          {/if}
         </div>
       </div>
 
