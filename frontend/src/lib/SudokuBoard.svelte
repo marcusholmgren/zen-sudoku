@@ -1,17 +1,18 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
 
   /**
    * @type {{
    *   solve: (board: Uint8Array) => Uint8Array,
    *   generate: (difficulty: string) => Uint8Array,
-   *   timerRunning: boolean,
-   *   secondsElapsed: number,
-   *   difficulty: string,
-   *   onToggleTimer: () => void,
-   *   onNewGame: (diff: string) => void,
-   *   onOpenNewGameModal: () => void,
-   *   onOpenHistory: () => void
+   *   timerRunning?: boolean,
+   *   secondsElapsed?: number,
+   *   difficulty?: string,
+   *   solved?: boolean,
+   *   onToggleTimer?: () => void,
+   *   onSolveCompleted?: () => void,
+   *   onOpenNewGameModal?: () => void,
+   *   onOpenHistory?: () => void
    * }}
    */
   let {
@@ -20,8 +21,9 @@
     timerRunning = false,
     secondsElapsed = 0,
     difficulty = 'Medium',
+    solved = $bindable(false),
     onToggleTimer,
-    onNewGame,
+    onSolveCompleted,
     onOpenNewGameModal,
     onOpenHistory
   } = $props();
@@ -32,10 +34,10 @@
   let givens = $state(Array(81).fill(false));
   // Status message
   let status = $state('');
-  // Whether the board is solved
-  let solved = $state(false);
   // Currently selected cell index
   let selectedIndex = $state(null);
+  // Prevent duplicate history entries for the same solved instance
+  let hasSavedHistory = $state(false);
 
   // Format time (seconds to MM:SS)
   let timerText = $derived(() => {
@@ -59,12 +61,16 @@
     0,0,0, 0,8,0, 0,7,9,
   ];
 
-  function loadBoardForDifficulty(diff) {
+  export function loadBoardForDifficulty(diff) {
     let newBoard;
     if (generate) {
-      const generated = generate(diff.toLowerCase());
-      if (generated && generated.length === 81) {
-        newBoard = Array.from(generated);
+      try {
+        const generated = generate(diff.toLowerCase());
+        if (generated && generated.length === 81) {
+          newBoard = Array.from(generated);
+        }
+      } catch (e) {
+        console.error('Failed to generate puzzle with WASM:', e);
       }
     }
     if (!newBoard) {
@@ -75,9 +81,10 @@
     status = '';
     solved = false;
     selectedIndex = null;
+    hasSavedHistory = false;
   }
 
-  // Load puzzle when component mounts or difficulty changes via external action
+  // Load puzzle when component mounts
   onMount(() => {
     loadBoardForDifficulty(difficulty);
   });
@@ -98,11 +105,21 @@
     const board = new Uint8Array(currentCells);
     const result = solve(board);
     if (!result || result.length === 0) return false;
-    // Check if currentCells matches result
     for (let i = 0; i < 81; i++) {
       if (currentCells[i] !== result[i]) return false;
     }
     return true;
+  }
+
+  function handleSolvedState() {
+    solved = true;
+    if (!hasSavedHistory) {
+      hasSavedHistory = true;
+      saveToHistory();
+    }
+    if (onSolveCompleted) {
+      onSolveCompleted();
+    }
   }
 
   function handleKeydown(event) {
@@ -113,12 +130,8 @@
       cells[selectedIndex] = val;
       status = '';
       if (checkCompletion(cells)) {
-        solved = true;
         status = '🎉 Puzzle Completed!';
-        saveToHistory();
-        if (timerRunning && onToggleTimer) {
-          onToggleTimer(); // Auto stop timer on complete
-        }
+        handleSolvedState();
       }
     } else if ((event.key === 'Backspace' || event.key === 'Delete' || event.key === 'Clear') && !givens[selectedIndex]) {
       cells[selectedIndex] = 0;
@@ -144,12 +157,8 @@
     cells[selectedIndex] = num;
     status = '';
     if (checkCompletion(cells)) {
-      solved = true;
       status = '🎉 Puzzle Completed!';
-      saveToHistory();
-      if (timerRunning && onToggleTimer) {
-        onToggleTimer(); // Auto stop timer on complete
-      }
+      handleSolvedState();
     }
   }
 
@@ -170,12 +179,8 @@
     } else {
       cells = Array.from(result);
       status = '✅ Solved with AI Assist!';
-      solved = true;
       selectedIndex = null;
-      saveToHistory();
-      if (timerRunning && onToggleTimer) {
-        onToggleTimer(); // Auto stop timer
-      }
+      handleSolvedState();
     }
   }
 
@@ -190,13 +195,15 @@
     try {
       const historyJson = sessionStorage.getItem('sudoku_history');
       const history = historyJson ? JSON.parse(historyJson) : [];
+      const now = new Date();
+      const dateStr = now.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const newEntry = {
-        id: 'puzzle_' + Date.now(),
+        id: 'puzzle_' + now.getTime(),
         difficulty: difficulty,
         timeTakenSeconds: secondsElapsed,
         timeTakenFormatted: timerText(),
-        date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        completedAt: new Date().toISOString()
+        date: dateStr,
+        completedAt: now.toISOString()
       };
       history.unshift(newEntry);
       sessionStorage.setItem('sudoku_history', JSON.stringify(history));
