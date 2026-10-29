@@ -133,6 +133,134 @@ fn solve_board(
     }
 }
 
+struct Prng {
+    state: u64,
+}
+
+impl Prng {
+    fn new(seed: u64) -> Self {
+        Self { state: if seed == 0 { 0x123456789abcdef } else { seed } }
+    }
+
+    fn next_u32(&mut self) -> u32 {
+        let mut x = self.state;
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        self.state = x;
+        x as u32
+    }
+
+    fn range(&mut self, min: usize, max: usize) -> usize {
+        if min >= max {
+            return min;
+        }
+        let diff = (max - min) as u32;
+        min + (self.next_u32() % diff) as usize
+    }
+
+    fn shuffle<T>(&mut self, slice: &mut [T]) {
+        for i in (1..slice.len()).rev() {
+            let j = self.range(0, i + 1);
+            slice.swap(i, j);
+        }
+    }
+}
+
+/// Backtracking grid generator with randomized search order.
+fn fill_grid_randomized(
+    grid: &mut [u8; 81],
+    row_masks: &mut [u16; 9],
+    col_masks: &mut [u16; 9],
+    box_masks: &mut [u16; 9],
+    prng: &mut Prng,
+) -> bool {
+    if let Some((idx, candidates_mask)) = find_best_cell(grid, row_masks, col_masks, box_masks) {
+        if candidates_mask == 0 {
+            return false;
+        }
+
+        let row = idx / 9;
+        let col = idx % 9;
+        let box_idx = (row / 3) * 3 + (col / 3);
+
+        let mut digits: Vec<u8> = (1..=9u8)
+            .filter(|&val| (candidates_mask & (1 << (val - 1))) != 0)
+            .collect();
+
+        prng.shuffle(&mut digits);
+
+        for val in digits {
+            let val_mask = 1 << (val - 1);
+            grid[idx] = val;
+            row_masks[row] |= val_mask;
+            col_masks[col] |= val_mask;
+            box_masks[box_idx] |= val_mask;
+
+            if fill_grid_randomized(grid, row_masks, col_masks, box_masks, prng) {
+                return true;
+            }
+
+            grid[idx] = 0;
+            row_masks[row] &= !val_mask;
+            col_masks[col] &= !val_mask;
+            box_masks[box_idx] &= !val_mask;
+        }
+        false
+    } else {
+        true
+    }
+}
+
+fn get_seed() -> u64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        js_sys::Date::now() as u64
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(0x123456789)
+    }
+}
+
+/// Generate a new Sudoku puzzle given a difficulty ("easy", "medium", "hard").
+///
+/// Returns an 81-length array with givens and 0 for empty cells.
+#[wasm_bindgen]
+pub fn generate(difficulty: &str) -> Vec<u8> {
+    let givens_count = match difficulty.to_lowercase().as_str() {
+        "easy" => 40,
+        "medium" => 32,
+        "hard" => 26,
+        _ => 32,
+    };
+
+    let seed = get_seed();
+    let mut prng = Prng::new(seed);
+
+    let mut full_grid = [0u8; 81];
+    let mut row_masks = [0u16; 9];
+    let mut col_masks = [0u16; 9];
+    let mut box_masks = [0u16; 9];
+
+    fill_grid_randomized(&mut full_grid, &mut row_masks, &mut col_masks, &mut box_masks, &mut prng);
+
+    let mut puzzle = full_grid;
+    let mut indices: Vec<usize> = (0..81).collect();
+    prng.shuffle(&mut indices);
+
+    let cells_to_remove = 81 - givens_count;
+    for &idx in indices.iter().take(cells_to_remove) {
+        puzzle[idx] = 0;
+    }
+
+    puzzle.to_vec()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -172,7 +300,6 @@ mod tests {
 
     #[test]
     fn test_unsolvable_returns_empty() {
-        // Two 5s in the same row — unsolvable
         let mut puzzle = [0u8; 81];
         puzzle[0] = 5;
         puzzle[1] = 5;
@@ -189,8 +316,29 @@ mod tests {
     #[test]
     fn test_invalid_value_returns_empty() {
         let mut puzzle = sample_puzzle();
-        puzzle[2] = 10; // Invalid value
+        puzzle[2] = 10;
         let result = solve(&puzzle);
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_generate_easy_medium_hard() {
+        for diff in &["easy", "medium", "hard"] {
+            let puzzle = generate(diff);
+            assert_eq!(puzzle.len(), 81);
+
+            let given_count = puzzle.iter().filter(|&&v| v != 0).count();
+            let expected_givens = match *diff {
+                "easy" => 40,
+                "medium" => 32,
+                "hard" => 26,
+                _ => 32,
+            };
+            assert_eq!(given_count, expected_givens);
+
+            let solved = solve(&puzzle);
+            assert_eq!(solved.len(), 81);
+            assert!(!solved.contains(&0));
+        }
     }
 }
