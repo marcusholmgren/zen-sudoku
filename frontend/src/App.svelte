@@ -262,6 +262,17 @@
           </div>
           <span class="px-2.5 py-1 bg-amber-100 text-amber-800 font-bold text-xs rounded-full">Hard</span>
         </button>
+
+        <button
+          onclick={() => selectedDifficulty = 'Custom'}
+          class="flex justify-between items-center p-4 rounded-2xl border-2 transition-all {selectedDifficulty === 'Custom' ? 'border-primary bg-primary-container/20 shadow-xs' : 'border-outline-variant hover:border-outline'}"
+        >
+          <div class="text-left">
+            <div class="font-bold text-on-surface">Custom / Blank Board</div>
+            <div class="text-xs text-on-surface-variant">0 givens • Input your own puzzle to solve</div>
+          </div>
+          <span class="px-2.5 py-1 bg-purple-100 text-purple-800 font-bold text-xs rounded-full">Custom</span>
+        </button>
       </div>
 
       <div class="flex gap-3">
@@ -402,7 +413,7 @@
           </h3>
           <ul class="text-xs text-on-surface-variant space-y-1.5 list-disc list-inside">
             <li><strong class="text-on-surface">Daily Challenge Timer:</strong> Use the Start/Stop button in the sidebar or timer badge to track your solve speed. Automatically stops on completion.</li>
-            <li><strong class="text-on-surface">Game Modes:</strong> Click "+ New Game" to choose Easy (40 givens), Medium (32 givens), or Hard (26 givens).</li>
+            <li><strong class="text-on-surface">Game Modes:</strong> Click "+ New Game" to choose Easy (40 givens), Medium (32 givens), Hard (26 givens), or Custom (blank board to add your own puzzle).</li>
             <li><strong class="text-on-surface">AI Auto-Solve:</strong> Click "Solve Puzzle" to complete the grid instantly using the Rust WASM engine.</li>
             <li><strong class="text-on-surface">Session Storage:</strong> All completed puzzles are automatically stored in Session Storage for history tracking.</li>
           </ul>
